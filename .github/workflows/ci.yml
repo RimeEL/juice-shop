@@ -42,7 +42,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r security-scripts/requirements.txt
+          pip install -r security-scripts/requirement.txt
 
       # 7. Run SQL Injection detector
       - name: Run SQL Injection detector
