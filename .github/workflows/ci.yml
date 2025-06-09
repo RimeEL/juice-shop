@@ -44,6 +44,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r security-scripts/requirement.txt
 
-      # 7. Run SQL Injection detector
-      - name: Run SQL Injection detector
-        run: python juice-shop/security-scripts/log_analysis.py logs/juice_logs_combined.csv
+      # 7. Run Log Analysis script
+      - name: Run Log Analysis
+        run: python security-scripts/log_analysis.py security-scripts/juice_logs_combined.csv
+
