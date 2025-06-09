@@ -3,6 +3,10 @@
 # pandas: Data manipulation and analysis (e.g., parsing structured logs, aggregating metrics)
 pandas
 
+matplotlib
+
+seaborn
+
 # numpy: Numerical operations (e.g., anomaly detection thresholds, mathematical transformations)
 numpy
 
