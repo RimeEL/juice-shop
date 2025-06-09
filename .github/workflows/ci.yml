@@ -1,161 +1,50 @@
-name: "CI/CD Pipeline with Docker + Security"
-
+name: juice_shop_scanner
 on:
   push:
-    branches-ignore:
-      - l10n_develop
-      - gh-pages
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
-      - 'monitoring/grafana-dashboard.json'
-      - 'screenshots/**'
-    tags-ignore:
-      - '*'
-  pull_request:
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
-      - 'data/static/i18n/*.json'
-      - 'frontend/src/assets/i18n/*.json'
-
-env:
-  NODE_DEFAULT_VERSION: 20
-  NODE_OPTIONS: "--max_old_space_size=4096"
-  CYCLONEDX_NPM_VERSION: '^2.0.0||^3.0.0'
-
+    branches:
+      - ci-modified
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_DEFAULT_VERSION }}
-      - run: |
-          npm ci --ignore-scripts
-          cd frontend
-          npm ci --ignore-scripts --legacy-peer-deps
-      - run: npm run lint
-      - run: |
-          npm run lint:config -- -f ./config/*.yml
-
-  coding-challenge-rsn:
+  build-and-scan:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_DEFAULT_VERSION }}
-      - run: npm ci
-      - run: npm run rsn
 
-  test:
-    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t juice-shop .
-      - name: Run tests inside container
-        run: docker run --rm juice-shop npm test
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-  api-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t juice-shop .
-      - name: Run Frisby API tests
-        run: docker run --rm juice-shop npm run frisby
+      # 2. Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.3.1'
 
-  coverage-report:
-    needs: [test, api-test]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: unit-test-lcov
-      - uses: actions/download-artifact@v4
-        with:
-          name: api-test-lcov
-      - env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+      # 3. Install Juice Shop dependencies
+      - name: Install Juice Shop dependencies
+        run: npm install
+
+      # 4. Start Juice Shop app
+      - name: Start Juice Shop app
         run: |
-          curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 \
-            > ./cc-test-reporter && chmod +x ./cc-test-reporter
-          sed -i 's|SF:|SF:frontend/|' frontend-lcov.info || true
-          ./cc-test-reporter format-coverage -t lcov -o codeclimate.frontend.json frontend-lcov.info
-          ./cc-test-reporter sum-coverage codeclimate.*.json -p 3
-          ./cc-test-reporter upload-coverage
+          npm start &
+          sleep 15
 
-  custom-config-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t juice-shop .
-      - run: |
-          for cfg in 7ms addo bodgeit ctf fbctf juicebox mozilla oss quiet tutorial unsafe; do
-            docker run --rm -e NODE_ENV=$cfg juice-shop npm run test:server || true;
-          done
-
-  e2e:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        browser: [chrome]
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # 5. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: ${{ env.NODE_DEFAULT_VERSION }}
-      - run: npm install -g @angular/cli
-      - run: npm ci
-      - name: Start Juice Shop Docker container
-        run: |
-          docker build -t juice-shop .
-          docker run -d -p 3000:3000 --name juice-shop-e2e juice-shop
-      - uses: cypress-io/github-action@v6
-        with:
-          browser: ${{ matrix.browser }}
-          wait-on: http://localhost:3000
+          python-version: '3.10.7'
 
-  docker-deploy:
-    runs-on: ubuntu-latest
-    needs: [e2e, coverage-report]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Pull Juice Shop image
-        run: docker pull bkimminich/juice-shop:latest
-      - name: Run container
-        id: juice-shop
-        run: docker run -d -p 3000:3000 bkimminich/juice-shop
-      - name: Check readiness
+      # 6. Install Python dependencies
+      - name: Install Python dependencies
         run: |
-          for i in {1..10}; do
-            curl -s http://localhost:3000 && break || sleep 5
-          done
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-  log-analysis:
-    runs-on: ubuntu-latest
-    needs: docker-deploy
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Python tools
-        run: |
-          python3 -m venv venv
-          ./venv/bin/pip install -r security-scripts/requirements.txt
-      - name: Save logs
-        run: |
-          mkdir -p logs
-          docker logs $(docker ps -q --filter ancestor=bkimminich/juice-shop) > logs/juice-shop-docker-logs.csv
-      - name: Run log_analysis
-        run: ./venv/bin/python security-scripts/log_analysis.py logs/juice-shop-docker-logs.csv
-      - uses: actions/upload-artifact@v4
-        with:
-          name: security-report
-          path: logs/analysis_report.json
+      # 7. Run SQL Injection detector
+      - name: Run SQL Injection detector
+        run: python juice-shop/security-scripts/log_analysis.py logs/juice_logs_combined.csv
+
+     
