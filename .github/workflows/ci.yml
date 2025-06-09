@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - ci-modified
+
 jobs:
   build-and-scan:
     runs-on: windows-latest
@@ -41,10 +42,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r security-scripts/requirements.txt
 
       # 7. Run SQL Injection detector
       - name: Run SQL Injection detector
         run: python juice-shop/security-scripts/log_analysis.py logs/juice_logs_combined.csv
-
-     
