@@ -15,8 +15,15 @@ import io
 
 # Function to upload and read log file
 def upload_log_file():
-    filename = "juice_logs_combined.csv"
-    
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+    else:
+        filename = "juice_logs_combined.csv"
+
+    if not os.path.exists(filename):
+        print(f"Erreur : le fichier '{filename}' est introuvable.")
+        sys.exit(1)
+
     if filename.endswith('.csv'):
         df = pd.read_csv(filename)
         return df, filename
